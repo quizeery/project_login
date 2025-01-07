@@ -48,7 +48,7 @@ CREATE DATABASE oauth_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 3. Konfiguracja pliku .env:
 env
-SECRET_KEY=your_secret_key
+SECRET_KEY=project
 DB_USER=root
 DB_PASSWORD=root
 DB_HOST=localhost
