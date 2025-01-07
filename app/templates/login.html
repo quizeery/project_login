@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OAuth API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        .token-display {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .token-display pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OAuth API Test</h1>
+        
+        <div class="timer" id="timer" style="display: none; color: #721c24; margin-bottom: 15px;">
+            The session will end in: <span id="countdown">60</span> seconds
+        </div>
+        
+        <div class="form-group">
+            <input type="text" id="username" placeholder="Username">
+        </div>
+        <div class="form-group">
+            <input type="password" id="password" placeholder="Password">
+        </div>
+        
+        <div class="form-group">
+            <button onclick="register()">Register</button>
+            <button onclick="login()">Login</button>
+            <button onclick="refresh()">Refresh Token</button>
+            <button onclick="logout()">Logout</button>
+        </div>
+        
+        <div class="token-display">
+            <h3>Tokens:</h3>
+            <pre id="tokens">No tokens available</pre>
+        </div>
+        
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        let logoutTimer;
+        let countdownTimer;
+        
+        // Funkcja uruchamiająca licznik do automatycznego wylogowania
+        function startLogoutTimer() {
+            const timerDiv = document.getElementById('timer');
+            const countdownSpan = document.getElementById('countdown');
+            let secondsLeft = 60; // Czas w sekundach
+            
+            timerDiv.style.display = 'block';
+            
+            // Czyścimy wcześniejsze timery, jeśli istnieją
+            if (logoutTimer) clearTimeout(logoutTimer);
+            if (countdownTimer) clearInterval(countdownTimer);
+            
+            // Ustawiamy timer na automatyczne wylogowanie
+            logoutTimer = setTimeout(() => {
+                logout();
+                timerDiv.style.display = 'none';
+            }, 60000);
+            
+            // Aktualizujemy odliczanie co sekundę
+            countdownTimer = setInterval(() => {
+                secondsLeft--;
+                countdownSpan.textContent = secondsLeft;
+                
+                if (secondsLeft <= 0) {
+                    clearInterval(countdownTimer);
+                }
+            }, 1000);
+        }
+        
+        // Funkcja czyszcząca timer wylogowania
+        function clearLogoutTimer() {
+            if (logoutTimer) clearTimeout(logoutTimer);
+            if (countdownTimer) clearInterval(countdownTimer);
+            const timerDiv = document.getElementById('timer');
+            timerDiv.style.display = 'none';
+        }
+
+        // Funkcja wyświetlająca status operacji
+        function showStatus(message, isError = false) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + (isError ? 'error' : 'success');
+        }
+
+        // Funkcja aktualizująca wyświetlanie tokenów
+        function updateTokenDisplay() {
+            const accessToken = localStorage.getItem('accessToken');
+            const refreshToken = localStorage.getItem('refreshToken');
+            const tokensDiv = document.getElementById('tokens');
+            
+            if (accessToken || refreshToken) {
+                tokensDiv.textContent = 
+                    `Access Token: ${accessToken || 'Brak dostępnego tokena'}\n\n` +
+                    `Refresh Token: ${refreshToken || 'Brak dostępnego tokena'}`;
+            } else {
+                tokensDiv.textContent = 'Brak dostępnych tokenów';
+            }
+        }
+
+        // Funkcja rejestracji nowego użytkownika
+        async function register() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus('Rejestracja zakończona sukcesem!');
+                } else {
+                    showStatus(data.error || 'Błąd rejestracji', true);
+                }
+            } catch (error) {
+                showStatus(error.message, true);
+            }
+        }
+        
+        // Funkcja logowania użytkownika
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    localStorage.setItem('accessToken', response.headers.get('X-Access-Token'));
+                    localStorage.setItem('refreshToken', response.headers.get('X-Refresh-Token'));
+                    updateTokenDisplay();
+                    showStatus('Logowanie zakończone sukcesem!');
+                    startLogoutTimer();  // Uruchamiamy timer po udanym logowaniu
+                } else {
+                    showStatus(data.error || 'Błąd logowania', true);
+                }
+            } catch (error) {
+                showStatus(error.message, true);
+            }
+        }
+        
+        // Funkcja odświeżania tokena dostępowego
+        async function refresh() {
+            const refreshToken = localStorage.getItem('refreshToken');
+            if (!refreshToken) {
+                showStatus('Brak dostępnego tokena odświeżania', true);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/refresh', {
+                    method: 'POST',
+                    headers: {
+                        'X-Refresh-Token': refreshToken
+                    }
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    localStorage.setItem('accessToken', response.headers.get('X-Access-Token'));
+                    localStorage.setItem('refreshToken', response.headers.get('X-Refresh-Token'));
+                    updateTokenDisplay();
+                    showStatus('Token został odświeżony!');
+                } else {
+                    showStatus(data.error || 'Błąd odświeżania tokena', true);
+                }
+            } catch (error) {
+                showStatus(error.message, true);
+            }
+        }
+        
+        // Funkcja wylogowania użytkownika
+        async function logout() {
+            const accessToken = localStorage.getItem('accessToken');
+            const refreshToken = localStorage.getItem('refreshToken');
+            
+            try {
+                const response = await fetch('/logout', {
+                    method: 'POST',
+                    headers: {
+                        'X-Access-Token': accessToken || '',
+                        'X-Refresh-Token': refreshToken || ''
+                    }
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('refreshToken');
+                    updateTokenDisplay();
+                    showStatus('Wylogowanie zakończone sukcesem!');
+                    clearLogoutTimer();  // Czyścimy timer podczas wylogowania
+                } else {
+                    showStatus(data.error || 'Błąd wylogowania', true);
+                }
+            } catch (error) {
+                showStatus(error.message, true);
+            }
+        }
+
+        // Aktualizujemy wyświetlanie tokenów podczas ładowania strony
+        updateTokenDisplay();
+    </script>
+</body>
+</html> 
